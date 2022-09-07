@@ -80,9 +80,9 @@ enum status FtlImpl_My1::read(Event &event)
 	return controller.issue(event);
 }
 
-uint FtlImpl_My1::get_similar_data_block(uint lpn)
-{
-	// 이진 탐색 써봐도 될 듯
+uint FtlImpl_My1::get_similar_data_block(uint lpn) // block들 중 지금 page가 들어가기 가장 적절한 곳을 고르는 함수
+{	// page의 AMT와 가장 비슷한 평균 AMT 값을 가진 block을 고르자.
+	// 이진 탐색을 쓸 수도?
 	// printf("AMT_table[lpn].timeTaken: %f\n", AMT_table[lpn].timeTaken);
 	// int idx = 0;
 	// if(AMT_table[lpn].timeTaken == 0) {
@@ -139,7 +139,7 @@ long FtlImpl_My1::get_my_free_data_page(Event &event)
 	return currentDataPage;
 }
 
-void FtlImpl_My1::AMT_table_update(uint lpn, double start_time)
+void FtlImpl_My1::AMT_table_update(uint lpn, double start_time) // page 개개인에 대한 AMT 정보 업데이트
 {
 	if (AMT_table[lpn].count) {
 		AMT_table[lpn].timeTaken = (start_time - AMT_table[lpn].firstTime) / AMT_table[lpn].count;
@@ -151,7 +151,7 @@ void FtlImpl_My1::AMT_table_update(uint lpn, double start_time)
 	printf("AMT_table[lpn].timeTaken: %lf\n", AMT_table[lpn].timeTaken);
 }
 
-void FtlImpl_My1::AMT_block_update(uint lpn, long prev_ppn, long cur_ppn)
+void FtlImpl_My1::AMT_block_update(uint lpn, long prev_ppn, long cur_ppn) // block 내 page들에 대하여 평균을 다시 한 번 계산함
 {
 
 	// printf("%f\n", start_time);
@@ -185,7 +185,8 @@ enum status FtlImpl_My1::write(Event &event)
 {
 	uint dlpn = event.get_logical_address();
 
-	// 1. time flow
+	// 1. time flow. AMT_block에는 block 내의 page들의 평균 '수정까지 남은 시간'이 들어 있다.
+	// 시간의 흐른 만큼 이 값들을 깎아줘야 새로운 page가 들어가기 적절한 위치를 찾을 수 있다.
 	if (event.get_start_time() != prev_start_time) {
 		double time_gap = event.get_start_time() - prev_start_time;
 		// time flow subtraction
@@ -231,7 +232,6 @@ enum status FtlImpl_My1::write(Event &event)
 
 enum status FtlImpl_My1::trim(Event &event)
 {
-	printf("trim start - ");
 	uint dlpn = event.get_logical_address();
 
 	event.set_address(Address(0, PAGE));
@@ -252,7 +252,6 @@ enum status FtlImpl_My1::trim(Event &event)
 	}
 
 	controller.stats.numFTLTrim++;
-	printf("end\n");
 	return controller.issue(event);
 }
 

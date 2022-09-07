@@ -145,7 +145,6 @@ double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size,
 double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, void *buffer)
 {
 	assert(start_time >= 0.0);
-
 	if (VIRTUAL_PAGE_SIZE == 1)
 		assert((long long int) logical_address <= (long long int) SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE * BLOCK_SIZE);
 	else
@@ -160,7 +159,7 @@ double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size,
 		fprintf(stderr, "Ssd error: %s: could not allocate Event\n", __func__);
 		exit(MEM_ERR);
 	}
-
+	
 	event->set_payload(buffer);
 
 	if(controller.event_arrive(*event) != SUCCESS)

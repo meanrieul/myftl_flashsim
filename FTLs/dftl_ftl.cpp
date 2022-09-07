@@ -96,7 +96,7 @@ enum status FtlImpl_Dftl::write(Event &event)
 	event.set_address(b);
 
 	controller.stats.numFTLWrite++;
-
+	print_ftl_statistics();
 	return controller.issue(event);
 }
 

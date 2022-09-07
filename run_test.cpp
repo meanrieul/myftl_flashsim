@@ -23,8 +23,8 @@
  * driver to create and run a very basic test of writes then reads */
 
 #include "ssd.h"
-
-#define SIZE 130
+#include <stdlib.h>
+#define SIZE 70
 
 using namespace ssd;
 
@@ -38,7 +38,7 @@ int main()
 
 	Ssd *ssd = new Ssd();
 
-	double result;
+	double result = 0;
 
 //	// Test one write to some blocks.
 //	for (int i = 0; i < SIZE; i++)
@@ -73,36 +73,41 @@ int main()
 //	}
 
 	// Test random writes to a block
-	result = ssd -> event_arrive(WRITE, 5, 1, (double) 0.0);
-	printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(WRITE, 4, 1, (double) 300.0);
-	printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(WRITE, 3, 1, (double) 600.0);
-	printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(WRITE, 2, 1, (double) 900.0);
-	printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(WRITE, 1, 1, (double) 1200.0);
-	printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(WRITE, 0, 1, (double) 1500.0);
-	printf("Write time: %.20lf\n", result);
+	// result = ssd -> event_arrive(WRITE, 5, 1, (double) 0.0);
+	// printf("Write time: %.20lf\n", result);
+	// result = ssd -> event_arrive(WRITE, 5, 1, (double) 200.0);
+	// printf("Write time: %.20lf\n", result);
+	// result = ssd -> event_arrive(WRITE, 5, 1, (double) 600.0);
+	// printf("Write time: %.20lf\n", result);
+	// result = ssd -> event_arrive(WRITE, 2, 1, (double) 900.0);
+	// printf("Write time: %.20lf\n", result);
+	// result = ssd -> event_arrive(WRITE, 1, 1, (double) 1200.0);
+	// printf("Write time: %.20lf\n", result);
+	// result = ssd -> event_arrive(WRITE, 5, 1, (double) 1500.0);
+	// printf("Write time: %.20lf\n", result);
 
-	for (int i = 0; i < SIZE-6; i++)
-	{
-		/* event_arrive(event_type, logical_address, size, start_time) */
-		result = ssd -> event_arrive(WRITE, 6+i, 1, (double) 1800+(300*i));
-		printf("Write time: %.20lf\n", result);
-	}
+	// for (int i = 0; i < SIZE-6; i++)
+	// {
+	// 	/* event_arrive(event_type, logical_address, size, start_time) */
+	// 	result = ssd -> event_arrive(WRITE, 6+i, 1, (double) 1800+(300*i));
+	// 	printf("Write time: %.20lf\n", result);
+	// }
 
-	// Force Merge
-	result = ssd -> event_arrive(WRITE, 10 , 1, (double) 0.0);
-	printf("Write time: %.20lf\n", result);
+	// // Force Merge
+	// result = ssd -> event_arrive(WRITE, 10 , 1, (double) 0.0);
+	// printf("Write time: %.20lf\n", result);
 //	for (int i = 0; i < SIZE; i++)
 //	{
 //		/* event_arrive(event_type, logical_address, size, start_time) */
 //		result = ssd -> event_arrive(READ, i%64, 1, (double) 1+(500*i));
 //		printf("Read time : %.20lf\n", result);
 //	}
-
+	for (int i = 0; i < SIZE; i++) {
+		srand(i);
+		printf("<<event %d>> ", i);
+		result += ssd -> event_arrive(WRITE, rand() % 64, 1, (double)100*i);
+	}
+	printf("Total write time: %lf\n", result);
 	delete ssd;
 	return 0;
 }

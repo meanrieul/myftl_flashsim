@@ -212,7 +212,7 @@ enum block_type {LOG, DATA, LOG_SEQ};
 /*
  * Enumeration of the different FTL implementations.
  */
-enum ftl_implementation {IMPL_PAGE, IMPL_BAST, IMPL_FAST, IMPL_DFTL, IMPL_BIMODAL};
+enum ftl_implementation {IMPL_PAGE, IMPL_BAST, IMPL_FAST, IMPL_DFTL, IMPL_BIMODAL, IMPL_MY1};
 
 
 #define BOOST_MULTI_INDEX_ENABLE_SAFE_MODE 1
@@ -933,6 +933,38 @@ public:
 	void print_ftl_statistics();
 };
 
+class FtlImpl_My1 : public FtlImpl_DftlParent
+{
+public:
+	FtlImpl_My1(Controller &controller);
+	~FtlImpl_My1();
+	enum status read(Event &event);
+	enum status write(Event &event);
+	enum status trim(Event &event);
+	void cleanup_block(Event &event, Block *block);
+	void print_ftl_statistics();
+	struct AvgModifiedTime {
+		double timeTaken;
+		double firstTime;
+		uint count;
+		uint blockidx;
+	};
+	struct AvgModifiedBlock {
+		double timeTaken;
+		uint pageCount;
+		uint validCount;
+	};
+	AvgModifiedTime *AMT_table;
+	AvgModifiedBlock *AMT_block;
+	double prev_start_time;
+
+	uint get_similar_data_block(uint lpn);
+	void AMT_block_update(uint lpn, long prev_ppn, long cur_ppn);
+	void AMT_table_update(uint lpn, double start_time);
+	long get_my_free_data_page(Event &event);
+
+};
+
 class FtlImpl_BDftl : public FtlImpl_DftlParent
 {
 public:
@@ -999,6 +1031,7 @@ public:
 	friend class FtlImpl_DftlParent;
 	friend class FtlImpl_Dftl;
 	friend class FtlImpl_BDftl;
+	friend class FtlImpl_My1;
 	friend class Block_manager;
 
 	Stats stats;

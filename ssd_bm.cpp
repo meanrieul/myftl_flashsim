@@ -175,7 +175,6 @@ void Block_manager::insert_events(Event &event)
 	float used = (int)invalid_list.size() + (int)log_active + (int)data_active - (int)free_list.size();
 	float total = NUMBER_OF_ADDRESSABLE_BLOCKS;
 	float ratio = used/total;
-
 	if (ratio < 0.90) // Magic number
 		return;
 

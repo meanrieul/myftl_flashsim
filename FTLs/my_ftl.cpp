@@ -128,7 +128,7 @@ long FtlImpl_My1::get_my_free_data_page(Event &event)
 	long prev_ppn = current.ppn;
 	uint block_idx = currentDataPage / BLOCK_SIZE;
 	uint block_target = get_similar_data_block(dlpn);
-	if(block_target == -1) {
+	if(block_target == -1) { // 빈 block을 찾을 수 없었음
 		print_ftl_statistics();
 	}
 	printf("block target: %d\n", block_target);

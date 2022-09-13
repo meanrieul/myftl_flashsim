@@ -24,7 +24,7 @@
 
 #include "ssd.h"
 #include <stdlib.h>
-#define SIZE 70
+#define SIZE 60
 
 using namespace ssd;
 
@@ -104,8 +104,10 @@ int main()
 //	}
 	for (int i = 0; i < SIZE; i++) {
 		srand(i);
-		printf("<<event %d>> ", i);
-		result += ssd -> event_arrive(WRITE, rand() % 64, 1, (double)100*i);
+		ulong lpn = rand() % 64;
+		printf("<<event %d: %ld>> ", i, lpn);
+
+		result += ssd -> event_arrive(WRITE, lpn, 1, (double)100*i);
 	}
 	printf("Total write time: %lf\n", result);
 	delete ssd;

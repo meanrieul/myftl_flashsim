@@ -942,6 +942,26 @@ public:
 	enum status write(Event &event);
 	enum status trim(Event &event);
 	void cleanup_block(Event &event, Block *block);
+private:
+	struct BPage {
+		uint pbn;
+		unsigned char nextPage;
+		enum block_state state;
+		double timeTaken;
+		bool optimal;
+
+		uint pageCount;
+		uint validCount;
+		BPage();
+	};
+
+	BPage *AMT_block;
+	bool *trim_map;
+
+	std::queue<Block*> blockQueue;
+
+	Block* inuseBlock;
+
 	void print_ftl_statistics();
 	struct AvgModifiedTime {
 		double timeTaken;
@@ -953,13 +973,14 @@ public:
 		double timeTaken;
 		uint pageCount;
 		uint validCount;
+		
 	};
 	AvgModifiedTime *AMT_table;
-	AvgModifiedBlock *AMT_block;
 	double prev_start_time;
+	bool block_next_new();
 
 	uint get_similar_data_block(uint lpn);
-	void AMT_block_update(uint lpn, long prev_ppn, long cur_ppn);
+	void AMT_block_update(uint lpn, uint prev_dlbn, uint dlbn);
 	void AMT_table_update(uint lpn, double start_time);
 	long get_my_free_data_page(Event &event);
 

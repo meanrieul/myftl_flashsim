@@ -43,48 +43,48 @@
 
 using namespace ssd;
 
-FtlImpl_My1::FtlImpl_My1(Controller &controller):
+FtlImpl_AMT::FtlImpl_AMT(Controller &controller):
 FtlImpl_DftlParent(controller)
 {
 	uint ssdSize = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 	AMT_table = new AvgModifiedTime[ssdSize];
-	AMT_block = new BPage[NUMBER_OF_ADDRESSABLE_BLOCKS];
+	EMT_table = new BPage[NUMBER_OF_ADDRESSABLE_BLOCKS];
 	trim_map = new bool[NUMBER_OF_ADDRESSABLE_BLOCKS*BLOCK_SIZE];
 	inuseBlock = NULL;
 	prev_start_time = 0;
 	printf("Total size to map: %uKB\n", ssdSize * PAGE_SIZE / 1024);
-	printf("Using myFTL1.\n");
+	printf("Using AMT-FTL.\n");
 	return;
 }
 
-FtlImpl_My1::~FtlImpl_My1(void)
+FtlImpl_AMT::~FtlImpl_AMT(void)
 {
 	delete[] AMT_table;
-	delete[] AMT_block;
+	delete[] EMT_table;
 	return;
 }
 
-FtlImpl_My1::BPage::BPage()
+FtlImpl_AMT::BPage::BPage()
 {
 	this->pbn = -1;
 	nextPage = 0;
 	optimal = true;
 	state = FREE;
-	timeTaken = 0;
+	emt = 0;
 	pageCount = 0;
 	validCount = 0;
 }
-enum status FtlImpl_My1::read(Event &event)
+enum status FtlImpl_AMT::read(Event &event)
 {
 	uint dlpn = event.get_logical_address();
 	uint dlbn = dlpn / BLOCK_SIZE;
 
 	// Block-level lookup
- 	if (AMT_block[dlbn].optimal)
+ 	if (EMT_table[dlbn].optimal)
 	{
-		uint dppn = AMT_block[dlbn].pbn + (dlpn % BLOCK_SIZE);
+		uint dppn = EMT_table[dlbn].pbn + (dlpn % BLOCK_SIZE);
 
-		if (AMT_block[dlbn].pbn != (uint) -1)
+		if (EMT_table[dlbn].pbn != (uint) -1)
 			event.set_address(Address(dppn, PAGE));
 		else
 		{
@@ -112,38 +112,14 @@ enum status FtlImpl_My1::read(Event &event)
 	return controller.issue(event);
 }
 
-uint FtlImpl_My1::get_similar_data_block(uint lpn) // block들 중 지금 page가 들어가기 가장 적절한 곳을 고르는 함수
+uint FtlImpl_AMT::get_similar_data_block(uint lpn) // block들 중 지금 page가 들어가기 가장 적절한 곳을 고르는 함수
 {	// page의 AMT와 가장 비슷한 평균 AMT 값을 가진 block을 고르자.
-	// 이진 탐색을 쓸 수도?
-	// printf("AMT_table[lpn].timeTaken: %f\n", AMT_table[lpn].timeTaken);
-	// int idx = 0;
-	// if(AMT_table[lpn].timeTaken == 0) {
-	// 	while(AMT_block[idx].pageCount >= BLOCK_SIZE && idx < NUMBER_OF_ADDRESSABLE_BLOCKS - 1) idx++;
-	// 	return idx;
-	// }
-
-	// int s_idx = 0; // shorter timeTaken BLOCK index
-	// int l_idx = 0; // longer timeTaken BLOCK index
-	// for(l_idx = 0; l_idx < NUMBER_OF_ADDRESSABLE_BLOCKS; l_idx++) {
-	// 	if(AMT_block[l_idx].validCount && AMT_block[l_idx].timeTaken >= AMT_table[lpn].timeTaken) break;
-	// }
-	// for(s_idx = NUMBER_OF_ADDRESSABLE_BLOCKS - 1; s_idx >= 0; s_idx--) {
-	// 	if(AMT_block[s_idx].validCount && AMT_block[s_idx].timeTaken <= AMT_table[lpn].timeTaken) break;
-	// }
-	// printf("s: %d / l:%d /", s_idx, l_idx);
-	// for(idx = s_idx; idx <= l_idx; idx++){
-	// 	if(AMT_block[idx].pageCount < BLOCK_SIZE){
-	// 		break;
-	// 	}
-	// }
-	// printf("%d\n", idx);
-	// return idx;
 	double min = 99999999999;
 	int min_idx = -1;
 	double dist = 0;
 	for(int i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++){
-		if(AMT_block[i].pageCount == BLOCK_SIZE) continue;
-		dist = fabs(AMT_table[lpn].timeTaken - AMT_block[i].timeTaken);
+		if(EMT_table[i].pageCount == BLOCK_SIZE) continue;
+		dist = fabs(AMT_table[lpn].amt - EMT_table[i].emt);
 		if(dist < min) {
 			min = dist;
 			min_idx = i;
@@ -153,7 +129,7 @@ uint FtlImpl_My1::get_similar_data_block(uint lpn) // block들 중 지금 page�
 }
 
 // block select and get free data page
-long FtlImpl_My1::get_my_free_data_page(Event &event)
+long FtlImpl_AMT::get_my_free_data_page(Event &event)
 {
 	// Important order. As get_free_data_page might change current.
 	long free_page = -1;
@@ -196,47 +172,35 @@ long FtlImpl_My1::get_my_free_data_page(Event &event)
 
 }
 
-void FtlImpl_My1::AMT_table_update(uint lpn, double start_time) // page 개개인에 대한 AMT 정보 업데이트
+void FtlImpl_AMT::AMT_table_update(uint lpn, double start_time) // page 개개인에 대한 AMT 정보 업데이트
 {
 	if (AMT_table[lpn].count) {
-		AMT_table[lpn].timeTaken = (start_time - AMT_table[lpn].firstTime) / AMT_table[lpn].count;
+		AMT_table[lpn].amt = (start_time - AMT_table[lpn].firstTime) / AMT_table[lpn].count;
 	}
 	else {
 		AMT_table[lpn].firstTime = start_time;
 	}
 	AMT_table[lpn].count++;
-	printf("AMT_table[lpn].timeTaken: %lf\n", AMT_table[lpn].timeTaken);
 }
 
-void FtlImpl_My1::AMT_block_update(uint lpn, uint pdlbn, uint dlbn) // block 내 page들에 대하여 평균을 다시 한 번 계산함
+void FtlImpl_AMT::EMT_table_update(uint lpn, uint pdlbn, uint dlbn) // block 내 page들에 대하여 평균을 다시 한 번 계산함
 {
-
-	// printf("%f\n", start_time);
-	// before update PAGE AMT table, we have to modify the BLOCK AMT table
-	if (AMT_table[lpn].count > 2) { // time taken 값이 존재하고, AMT_block 값에 관여되어 있다. 없애줘야 함.
-		// printf("AMT_block[pbi].timeTaken: %lf\n", AMT_block[pbi].timeTaken);
-		// printf("AMT_block[pbi].pageCount: %d\n", AMT_block[pbi].pageCount);
-		// printf("AMT_table[lpn].timeTaken: %lf\n", AMT_table[lpn].timeTaken);
-		if(AMT_block[pdlbn].pageCount == 1)
-			AMT_block[pdlbn].timeTaken = 0;
+	if (AMT_table[lpn].count > 2) { // time taken 값이 존재하고, EMT_table 값에 관여되어 있다. 없애줘야 함.
+		if(EMT_table[pdlbn].pageCount == 1)
+			EMT_table[pdlbn].emt = 0;
 		else
-			AMT_block[pdlbn].timeTaken = (AMT_block[pdlbn].timeTaken * AMT_block[pdlbn].validCount - AMT_table[lpn].timeTaken) / (AMT_block[pdlbn].validCount - 1);
-		// printf("AMT_block[pbi].timeTaken -> %lf\n", AMT_block[pbi].timeTaken);
+			EMT_table[pdlbn].emt = (EMT_table[pdlbn].emt * EMT_table[pdlbn].validCount - AMT_table[lpn].amt) / (EMT_table[pdlbn].validCount - 1);
 	}
-	if (AMT_block[pdlbn].validCount > 1) AMT_block[pdlbn].validCount--;
-
 	if (AMT_table[lpn].count > 1) {
-		// printf("AMT_block[cbi].timeTaken: %lf\n", AMT_block[cbi].timeTaken);
-		// printf("AMT_block[cbi].pageCount: %d\n", AMT_block[cbi].pageCount);
-		// printf("AMT_table[lpn].timeTaken: %lf\n", AMT_table[lpn].timeTaken);
-		AMT_block[dlbn].timeTaken = (AMT_block[dlbn].timeTaken * AMT_block[dlbn].validCount + AMT_table[lpn].timeTaken) / (AMT_block[dlbn].validCount + 1);
-		// printf("AMT_block[cbi].timeTaken -> %lf\n", AMT_block[cbi].timeTaken);
-		if(AMT_block[dlbn].timeTaken < 0) AMT_block[dlbn].timeTaken = 0;
+		EMT_table[pdlbn].validCount--;
+		printf("%f, %d, %f\n", EMT_table[dlbn].emt, EMT_table[dlbn].validCount, AMT_table[lpn].amt);
+		EMT_table[dlbn].emt = (EMT_table[dlbn].emt * EMT_table[dlbn].validCount + AMT_table[lpn].amt) / (EMT_table[dlbn].validCount + 1);
+		if(EMT_table[dlbn].emt < 0) EMT_table[dlbn].emt = 0;
 	}
-	AMT_block[dlbn].validCount++;
+	EMT_table[dlbn].validCount++;
 }
 
-enum status FtlImpl_My1::write(Event &event)
+enum status FtlImpl_AMT::write(Event &event)
 {
 	uint dlpn = event.get_logical_address();
 	MPage current = trans_map[dlpn];
@@ -245,17 +209,16 @@ enum status FtlImpl_My1::write(Event &event)
 	// 시간의 흐른 만큼 이 값들을 깎아줘야 새로운 page가 들어가기 적절한 위치를 찾을 수 있다.
 	if (event.get_start_time() != prev_start_time) {
 		double time_gap = event.get_start_time() - prev_start_time;
-		// time flow subtraction
 		for(uint i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {			
-			if(AMT_block[i].timeTaken < time_gap) AMT_block[i].timeTaken = 0;
-			else AMT_block[i].timeTaken -= time_gap;
+			if(EMT_table[i].emt < time_gap) EMT_table[i].emt = 0;
+			else EMT_table[i].emt -= time_gap;
 		}
 	}
 
 	// 2. AMT_table update
 	AMT_table_update(dlpn, event.get_start_time());
 
-	// 3. get similar block
+	// 3. AMT 값과 가장 비슷한 EMT를 갖는 블록 찾기
 	uint prev_dlbn = AMT_table[dlpn].blockidx;
 	uint dlbn = get_similar_data_block(dlpn);
 	bool handled = false; // this write event handled?
@@ -264,32 +227,32 @@ enum status FtlImpl_My1::write(Event &event)
 	trim_map[dlpn] = false;
 	
 	// Block-level lookup
-	if (AMT_block[dlbn].optimal)
+	if (EMT_table[dlbn].optimal)
 	{
 		// Optimised case for block level lookup
 
 		// Get new block if necessary
-		if (AMT_block[dlbn].pbn == -1u && dlpn % BLOCK_SIZE == 0)
-			AMT_block[dlbn].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
+		if (EMT_table[dlbn].pbn == -1u && dlpn % BLOCK_SIZE == 0)
+			EMT_table[dlbn].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
 
-		if (AMT_block[dlbn].pbn != -1u)
+		if (EMT_table[dlbn].pbn != -1u)
 		{
 			unsigned char dppn = dlpn % BLOCK_SIZE;
 
 			controller.stats.numMemoryWrite++; // Update next page
 			
 			event.incr_time_taken(RAM_WRITE_DELAY);
-			event.set_address(Address(AMT_block[dlbn].pbn + dppn, PAGE));
-			AMT_block[dlbn].nextPage++;
+			event.set_address(Address(EMT_table[dlbn].pbn + dppn, PAGE));
+			EMT_table[dlbn].nextPage++;
 			handled = true;
 
 			// unsigned char dppn = dlpn % BLOCK_SIZE;
-			// if (AMT_block[dlbn].nextPage == dppn)
+			// if (EMT_table[dlbn].nextPage == dppn)
 			// {
 			// 	controller.stats.numMemoryWrite++; // Update next page
 			// 	event.incr_time_taken(RAM_WRITE_DELAY);
-			// 	event.set_address(Address(AMT_block[dlbn].pbn + dppn, PAGE));
-			// 	AMT_block[dlbn].nextPage++;
+			// 	event.set_address(Address(EMT_table[dlbn].pbn + dppn, PAGE));
+			// 	EMT_table[dlbn].nextPage++;
 			// 	handled = true;
 			// } else {
 			// 	/*
@@ -302,7 +265,7 @@ enum status FtlImpl_My1::write(Event &event)
 			// 	 */
 
 			// 	// 1-3
-			// 	uint numPages = AMT_block[dlbn].nextPage;
+			// 	uint numPages = EMT_table[dlbn].nextPage;
 			// 	long startAdr = dlbn * BLOCK_SIZE;
 
 			// 	Block *b = controller.get_block_pointer(Address(startAdr, PAGE));
@@ -318,7 +281,7 @@ enum status FtlImpl_My1::write(Event &event)
 
 			// 		if (current.ppn != -1)
 			// 		{
-			// 			update_translation_map(current, AMT_block[dlbn].pbn+i);
+			// 			update_translation_map(current, EMT_table[dlbn].pbn+i);
 			// 			current.create_ts = event.get_start_time();
 			// 			current.modified_ts = event.get_start_time();
 			// 			current.cached = true;
@@ -335,10 +298,10 @@ enum status FtlImpl_My1::write(Event &event)
 			// 	// 4. Set block to non optimal
 			// 	event.incr_time_taken(RAM_WRITE_DELAY);
 			// 	controller.stats.numMemoryWrite++;
-			// 	AMT_block[dlbn].optimal = false;
+			// 	EMT_table[dlbn].optimal = false;
 
 			// 	// 5. Add it to the queue to be used later.
-			// 	Block *block = controller.get_block_pointer(Address(AMT_block[dlbn].pbn, BLOCK));
+			// 	Block *block = controller.get_block_pointer(Address(EMT_table[dlbn].pbn, BLOCK));
 			// 	if (block->get_pages_valid() != BLOCK_SIZE)
 			// 	{
 			// 		if (inuseBlock == NULL)
@@ -351,7 +314,7 @@ enum status FtlImpl_My1::write(Event &event)
 			// 	controller.stats.numPageBlockToPageConversion++;
 			// }
 		} else {
-			AMT_block[dlbn].optimal = false;
+			EMT_table[dlbn].optimal = false;
 		}
 	}
 
@@ -380,22 +343,21 @@ enum status FtlImpl_My1::write(Event &event)
 	event.incr_time_taken(RAM_READ_DELAY*3);
 	controller.stats.numFTLWrite++; // Page writes
 
-	// 4. AMT_block update
+	// 4. EMT_table update
 	current = trans_map[dlpn];
 
-	AMT_block_update(dlpn, prev_dlbn, dlpn);
+	EMT_table_update(dlpn, prev_dlbn, dlbn);
 	AMT_table[dlpn].blockidx = dlbn;
-	AMT_block[dlbn].pageCount++;
+	EMT_table[dlbn].pageCount++;
 	
 	 for(uint i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
-	 	printf("%d %lf / page: %d / valid: %d\n", i, AMT_block[i].timeTaken, AMT_block[i].pageCount, AMT_block[i].validCount);
+	 	printf("%d %lf / page: %d / valid: %d\n", i, EMT_table[i].emt, EMT_table[i].pageCount, EMT_table[i].validCount);
 	 }
 	prev_start_time = event.get_start_time();
-	print_ftl_statistics();
 	return controller.issue(event);
 }
 
-enum status FtlImpl_My1::trim(Event &event)
+enum status FtlImpl_AMT::trim(Event &event)
 {
 	uint dlpn = event.get_logical_address();
 	uint dlbn = dlpn / BLOCK_SIZE;
@@ -404,16 +366,16 @@ enum status FtlImpl_My1::trim(Event &event)
 	trim_map[dlpn] = true;
 
 	// Block-level lookup
-	if (AMT_block[dlbn].optimal)
+	if (EMT_table[dlbn].optimal)
 	{
-		Address address = Address(AMT_block[dlbn].pbn+event.get_logical_address()%BLOCK_SIZE, PAGE);
+		Address address = Address(EMT_table[dlbn].pbn+event.get_logical_address()%BLOCK_SIZE, PAGE);
 		Block *block = controller.get_block_pointer(address);
 		block->invalidate_page(address.page);
 
 		if (block->get_state() == INACTIVE) // All pages invalid, force an erase. PTRIM style.
 		{
-			AMT_block[dlbn].pbn = -1;
-			AMT_block[dlbn].nextPage = 0;
+			EMT_table[dlbn].pbn = -1;
+			EMT_table[dlbn].nextPage = 0;
 			Block_manager::instance()->erase_and_invalidate(event, address, DATA);
 		}
 	} else { // DFTL lookup
@@ -450,9 +412,9 @@ enum status FtlImpl_My1::trim(Event &event)
 
 		if (allTrimmed)
 		{
-			AMT_block[dlbn].pbn = -1;
-			AMT_block[dlbn].nextPage = 0;
-			AMT_block[dlbn].optimal = true;
+			EMT_table[dlbn].pbn = -1;
+			EMT_table[dlbn].nextPage = 0;
+			EMT_table[dlbn].optimal = true;
 			controller.stats.numMemoryWrite++; // Update block_map.
 		}
 	}
@@ -467,7 +429,7 @@ enum status FtlImpl_My1::trim(Event &event)
 	return controller.issue(event);
 }
 
-void FtlImpl_My1::cleanup_block(Event &event, Block *block)
+void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 {
 	std::map<long, long> invalidated_translation;
 	/*
@@ -555,12 +517,12 @@ void FtlImpl_My1::cleanup_block(Event &event, Block *block)
 }
 
 // Returns true if the next page is in a new block
-bool FtlImpl_My1::block_next_new()
+bool FtlImpl_AMT::block_next_new()
 {
 	return (currentDataPage == -1 || currentDataPage % BLOCK_SIZE == BLOCK_SIZE -1);
 }
 
-void FtlImpl_My1::print_ftl_statistics()
+void FtlImpl_AMT::print_ftl_statistics()
 {
 	printf("FTL Stats:\n");
 	printf(" Blocks total: %i\n", NUMBER_OF_ADDRESSABLE_BLOCKS);
@@ -568,7 +530,7 @@ void FtlImpl_My1::print_ftl_statistics()
 	int numOptimal = 0;
 	for (uint i=0;i<NUMBER_OF_ADDRESSABLE_BLOCKS;i++)
 	{
-		BPage bp = AMT_block[i];
+		BPage bp = EMT_table[i];
 		if (bp.optimal)
 		{
 			printf("Optimal: %i\n", i);

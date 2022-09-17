@@ -212,7 +212,7 @@ enum block_type {LOG, DATA, LOG_SEQ};
 /*
  * Enumeration of the different FTL implementations.
  */
-enum ftl_implementation {IMPL_PAGE, IMPL_BAST, IMPL_FAST, IMPL_DFTL, IMPL_BIMODAL, IMPL_MY1};
+enum ftl_implementation {IMPL_PAGE, IMPL_BAST, IMPL_FAST, IMPL_DFTL, IMPL_BIMODAL, IMPL_AMT};
 
 
 #define BOOST_MULTI_INDEX_ENABLE_SAFE_MODE 1
@@ -245,6 +245,7 @@ class FtlImpl_Fast;
 class FtlImpl_DftlParent;
 class FtlImpl_Dftl;
 class FtlImpl_BDftl;
+class FTLImpl_AMT;
 
 class Ram;
 class Controller;
@@ -933,11 +934,11 @@ public:
 	void print_ftl_statistics();
 };
 
-class FtlImpl_My1 : public FtlImpl_DftlParent
+class FtlImpl_AMT : public FtlImpl_DftlParent
 {
 public:
-	FtlImpl_My1(Controller &controller);
-	~FtlImpl_My1();
+	FtlImpl_AMT(Controller &controller);
+	~FtlImpl_AMT();
 	enum status read(Event &event);
 	enum status write(Event &event);
 	enum status trim(Event &event);
@@ -947,7 +948,7 @@ private:
 		uint pbn;
 		unsigned char nextPage;
 		enum block_state state;
-		double timeTaken;
+		double emt;
 		bool optimal;
 
 		uint pageCount;
@@ -955,32 +956,25 @@ private:
 		BPage();
 	};
 
-	BPage *AMT_block;
+	BPage *EMT_table;
 	bool *trim_map;
-
-	std::queue<Block*> blockQueue;
 
 	Block* inuseBlock;
 
 	void print_ftl_statistics();
 	struct AvgModifiedTime {
-		double timeTaken;
+		double amt;
 		double firstTime;
 		uint count;
 		uint blockidx;
 	};
-	struct AvgModifiedBlock {
-		double timeTaken;
-		uint pageCount;
-		uint validCount;
-		
-	};
+	std::queue<Block*> blockQueue;
 	AvgModifiedTime *AMT_table;
 	double prev_start_time;
 	bool block_next_new();
 
 	uint get_similar_data_block(uint lpn);
-	void AMT_block_update(uint lpn, uint prev_dlbn, uint dlbn);
+	void EMT_table_update(uint lpn, uint prev_dlbn, uint dlbn);
 	void AMT_table_update(uint lpn, double start_time);
 	long get_my_free_data_page(Event &event);
 
@@ -1052,7 +1046,7 @@ public:
 	friend class FtlImpl_DftlParent;
 	friend class FtlImpl_Dftl;
 	friend class FtlImpl_BDftl;
-	friend class FtlImpl_My1;
+	friend class FtlImpl_AMT;
 	friend class Block_manager;
 
 	Stats stats;

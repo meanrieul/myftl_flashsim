@@ -131,7 +131,7 @@ void *page_data;
 uint MAP_DIRECTORY_SIZE = 0;
 
 /*
- * Implementation to use (0 -> Page, 1 -> BAST, 2 -> FAST, 3 -> DFTL, 4 -> BiModal, 5 -> myFTL
+ * Implementation to use (0 -> Page, 1 -> BAST, 2 -> FAST, 3 -> DFTL, 4 -> BiModal, 5 -> AMT-FTL
  */
 uint FTL_IMPLEMENTATION = 0;
 

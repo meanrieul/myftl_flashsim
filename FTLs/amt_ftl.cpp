@@ -226,100 +226,26 @@ enum status FtlImpl_AMT::write(Event &event)
 	// Update trim map
 	trim_map[dlpn] = false;
 	
-	// Block-level lookup
-	printf("optimal: %d\n", EMT_table[dlbn].optimal);
-	if (EMT_table[dlbn].optimal)
-	{
-		// Optimised case for block level lookup
+	// Get new block if necessary
+	printf("pbn: %d\n", EMT_table[dlbn].pbn);
 
-		// Get new block if necessary
-		printf("pbn: %d\n", EMT_table[dlbn].pbn);
-
-		if (EMT_table[dlbn].pbn == -1u && dlpn % BLOCK_SIZE == 0)
-			EMT_table[dlbn].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
-
-		if (EMT_table[dlbn].pbn != -1u)
-		{
-			unsigned char dppn = dlpn % BLOCK_SIZE;
-
-			controller.stats.numMemoryWrite++; // Update next page
-			
-			event.incr_time_taken(RAM_WRITE_DELAY);
-			event.set_address(Address(EMT_table[dlbn].pbn + EMT_table[dlbn].nextPage, PAGE));
-			EMT_table[dlbn].nextPage++;
-			handled = true;
-
-			// unsigned char dppn = dlpn % BLOCK_SIZE;
-			// if (EMT_table[dlbn].nextPage == dppn)
-			// {
-			// 	controller.stats.numMemoryWrite++; // Update next page
-			// 	event.incr_time_taken(RAM_WRITE_DELAY);
-			// 	event.set_address(Address(EMT_table[dlbn].pbn + dppn, PAGE));
-			// 	EMT_table[dlbn].nextPage++;
-			// 	handled = true;
-			// } else {
-			// 	/*
-			// 	 * Transfer the block to DFTL.
-			// 	 * 1. Get number of pages to write
-			// 	 * 2. Get start address for translation map
-			// 	 * 3. Write mappings to trans_map
-			// 	 * 4. Make block non-optimal
-			// 	 * 5. Add the block to the block queue to be used later
-			// 	 */
-
-			// 	// 1-3
-			// 	uint numPages = EMT_table[dlbn].nextPage;
-			// 	long startAdr = dlbn * BLOCK_SIZE;
-
-			// 	Block *b = controller.get_block_pointer(Address(startAdr, PAGE));
-
-			// 	for (uint i=0;i<numPages;i++)
-			// 	{
-			// 		//assert(b->get_state(i) != INVALID);
-
-			// 		if (b->get_state(i) != VALID)
-			// 			continue;
-
-			// 		MPage current = trans_map[startAdr + i];
-
-			// 		if (current.ppn != -1)
-			// 		{
-			// 			update_translation_map(current, EMT_table[dlbn].pbn+i);
-			// 			current.create_ts = event.get_start_time();
-			// 			current.modified_ts = event.get_start_time();
-			// 			current.cached = true;
-			// 			trans_map.replace(trans_map.begin()+startAdr+i, current);
-
-			// 			cmt++;
-
-			// 			event.incr_time_taken(RAM_WRITE_DELAY);
-			// 			controller.stats.numMemoryWrite++;
-			// 		}
-
-			// 	}
-
-			// 	// 4. Set block to non optimal
-			// 	event.incr_time_taken(RAM_WRITE_DELAY);
-			// 	controller.stats.numMemoryWrite++;
-			// 	EMT_table[dlbn].optimal = false;
-
-			// 	// 5. Add it to the queue to be used later.
-			// 	Block *block = controller.get_block_pointer(Address(EMT_table[dlbn].pbn, BLOCK));
-			// 	if (block->get_pages_valid() != BLOCK_SIZE)
-			// 	{
-			// 		if (inuseBlock == NULL)
-			// 			inuseBlock = block;
-			// 		else
-			// 			blockQueue.push(block);
-			// 	}
-
-
-			// 	controller.stats.numPageBlockToPageConversion++;
-			// }
-		} else {
-			EMT_table[dlbn].optimal = false;
-		}
+	if (EMT_table[dlbn].pbn == -1u) {
+		EMT_table[dlbn].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
 	}
+
+	printf("pbn: %d\n", EMT_table[dlbn].pbn);
+
+	if (EMT_table[dlbn].pbn != -1u)
+	{
+		unsigned char dppn = dlpn % BLOCK_SIZE;
+
+		controller.stats.numMemoryWrite++; // Update next page
+		
+		event.incr_time_taken(RAM_WRITE_DELAY);
+		event.set_address(Address(EMT_table[dlbn].pbn + EMT_table[dlbn].nextPage, PAGE));
+		EMT_table[dlbn].nextPage++;
+		handled = true;
+	} 
 
 	if (!handled)
 	{

@@ -133,7 +133,6 @@ long FtlImpl_DftlParent::get_free_data_page(Event &event, bool insert_events)
 		currentDataPage = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
 	else
 		currentDataPage++;
-	printf("currentDataPage: %d\n", currentDataPage);
 	return currentDataPage;
 }
 

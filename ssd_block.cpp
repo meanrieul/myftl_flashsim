@@ -106,6 +106,7 @@ enum status Block::read(Event &event)
 enum status Block::write(Event &event)
 {
 	assert(data != NULL);
+	printf("block: %d page: %d\n", event.get_address().block, event.get_address().page);
 	enum status ret = data[event.get_address().page]._write(event);
 
 	if(event.get_noop() == false)

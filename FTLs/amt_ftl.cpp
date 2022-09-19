@@ -218,7 +218,7 @@ enum status FtlImpl_AMT::write(Event &event)
 	// 2. AMT_table update
 	AMT_table_update(dlpn, event.get_start_time());
 
-	// 3. AMT 값과 가장 비슷한 EMT를 갖는 블록 찾기
+	// 3. AMT값과 가장 비슷한 EMT를 가진 블록 찾기
 	uint prev_dlbn = AMT_table[dlpn].blockidx;
 	uint dlbn = get_similar_data_block(dlpn);
 	bool handled = false; // this write event handled?
@@ -227,11 +227,14 @@ enum status FtlImpl_AMT::write(Event &event)
 	trim_map[dlpn] = false;
 	
 	// Block-level lookup
+	printf("optimal: %d\n", EMT_table[dlbn].optimal);
 	if (EMT_table[dlbn].optimal)
 	{
 		// Optimised case for block level lookup
 
 		// Get new block if necessary
+		printf("pbn: %d\n", EMT_table[dlbn].pbn);
+
 		if (EMT_table[dlbn].pbn == -1u && dlpn % BLOCK_SIZE == 0)
 			EMT_table[dlbn].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
 
@@ -242,7 +245,7 @@ enum status FtlImpl_AMT::write(Event &event)
 			controller.stats.numMemoryWrite++; // Update next page
 			
 			event.incr_time_taken(RAM_WRITE_DELAY);
-			event.set_address(Address(EMT_table[dlbn].pbn + dppn, PAGE));
+			event.set_address(Address(EMT_table[dlbn].pbn + EMT_table[dlbn].nextPage, PAGE));
 			EMT_table[dlbn].nextPage++;
 			handled = true;
 

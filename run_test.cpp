@@ -105,7 +105,7 @@ int main()
 	for (int i = 0; i < SIZE; i++) {
 		srand(i);
 		ulong lpn = rand() % 64;
-		printf("<<event %d: %ld>> ", i, lpn);
+		printf("<<event %d: %ld>>\n", i, lpn);
 
 		result += ssd -> event_arrive(WRITE, lpn, 1, (double)100*i);
 	}

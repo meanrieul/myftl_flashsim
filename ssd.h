@@ -678,7 +678,7 @@ public:
 	Address get_free_block(block_type btype, Event &event);
 	void invalidate(Address address, block_type btype);
 	void print_statistics();
-	void insert_events(Event &event);
+	std::vector<int> insert_events(Event &event);
 	void promote_block(block_type to_type);
 	bool is_log_full();
 	void erase_and_invalidate(Event &event, Address &address, block_type btype);
@@ -691,11 +691,13 @@ public:
 	static Block_manager *instance();
 	static void instance_initialize(FtlParent *ftl);
 	static Block_manager *inst;
+	
 
 	void cost_insert(Block *b);
 
 	void print_cost_status();
 
+	static std::vector<int> EMT_delete_list;
 
 
 private:
@@ -943,7 +945,7 @@ public:
 	enum status write(Event &event);
 	enum status trim(Event &event);
 	void cleanup_block(Event &event, Block *block);
-private:
+
 	struct BPage {
 		uint pbn;
 		unsigned char nextPage;
@@ -967,6 +969,7 @@ private:
 		double firstTime;
 		uint count;
 		uint blockidx;
+		uint pageidx;
 	};
 	std::queue<Block*> blockQueue;
 	AvgModifiedTime *AMT_table;
@@ -975,6 +978,7 @@ private:
 
 	uint get_similar_data_block(uint lpn);
 	void EMT_table_update(uint lpn, uint prev_dlbn, uint dlbn);
+	void EMT_table_delete(uint dlbn);
 	void AMT_table_update(uint lpn, double start_time);
 	long get_my_free_data_page(Event &event);
 

@@ -221,6 +221,7 @@ enum status FtlImpl_BDftl::write(Event &event)
 	controller.stats.numMemoryRead += 3; // Block-level lookup + range check + optimal check
 	event.incr_time_taken(RAM_READ_DELAY*3);
 	controller.stats.numFTLWrite++; // Page writes
+	print_ftl_statistics();
 
 	return controller.issue(event);
 }

@@ -945,7 +945,7 @@ public:
 	enum status write(Event &event);
 	enum status trim(Event &event);
 	void cleanup_block(Event &event, Block *block);
-
+	uint copycnt;
 	struct BPage {
 		uint pbn;
 		unsigned char nextPage;
@@ -959,6 +959,7 @@ public:
 	};
 
 	BPage *EMT_table;
+	int *pbn_to_lbn;
 	bool *trim_map;
 
 	Block* inuseBlock;
@@ -967,6 +968,7 @@ public:
 	struct AvgModifiedTime {
 		double amt;
 		double firstTime;
+		double lastTime;
 		uint count;
 		uint blockidx;
 		uint pageidx;
@@ -976,10 +978,11 @@ public:
 	double prev_start_time;
 	bool block_next_new();
 
-	uint get_similar_data_block(uint lpn);
+	uint get_similar_data_block(uint lpn, double timeGap);
 	void EMT_table_update(uint lpn, uint prev_dlbn, uint dlbn);
-	void EMT_table_delete(uint dlbn);
+	void EMT_table_delete(uint pbn);
 	void AMT_table_update(uint lpn, double start_time);
+	void print_block_status();
 	long get_my_free_data_page(Event &event);
 
 };

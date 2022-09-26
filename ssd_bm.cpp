@@ -175,7 +175,7 @@ std::vector<int> Block_manager::insert_events(Event &event)
 	float used = (int)invalid_list.size() + (int)log_active + (int)data_active - (int)free_list.size();
 	float total = NUMBER_OF_ADDRESSABLE_BLOCKS;
 	float ratio = used/total;
-	printf("ratio: %f\n", ratio);
+	printf("ratio: %f, time: %f, lpn: %d\n", ratio, event.get_start_time(), event.get_logical_address());
 	if (ratio < 0.90) // Magic number
 		return EMT_delete_list;
 
@@ -185,7 +185,6 @@ std::vector<int> Block_manager::insert_events(Event &event)
 	//printf("%i %i %i\n", invalid_list.size(), log_active, data_active);
 
 	// First step and least expensive is to go though invalid list. (Only used by FAST)
-	printf("invalid_list size: %d\n", invalid_list.size());
 	while (num_to_erase != 0 && invalid_list.size() != 0)
 	{
 		Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_start_time());
@@ -195,28 +194,29 @@ std::vector<int> Block_manager::insert_events(Event &event)
 
 		free_list.push_back(invalid_list.back());
 		invalid_list.pop_back();
-
+		//printf("erase success\n");
 		num_to_erase--;
 		ftl->controller.stats.numFTLErase++;
 	}
-
+	printf("here\n");
 	num_insert_events++;
-	int erased_cnt = 0;
 	if (FTL_IMPLEMENTATION == IMPL_DFTL || FTL_IMPLEMENTATION == IMPL_BIMODAL || FTL_IMPLEMENTATION == IMPL_AMT)
 	{
 		ActiveByCost::iterator it = active_cost.get<1>().end();
 		--it;
-		Block_manager:: EMT_delete_list;
 		while (num_to_erase != 0 && (*it)->get_pages_invalid() > 0 && (*it)->get_pages_valid() == BLOCK_SIZE)
 		{
+			printf("it pbn: %d ", (*it)->physical_address);
+			printf("num_to_erase: %d ", num_to_erase);
+			printf("current_writing_block: %d ", current_writing_block);
 			if (current_writing_block != (*it)->physical_address)
 			{
+				printf("here! ");
 				//printf("erase p: %p phy: %li ratio: %i num: %i\n", (*it), (*it)->physical_address, (*it)->get_pages_invalid(), num_to_erase);
 				Block *blockErase = (*it);
-
+				printf("be pbn: %d ", blockErase->physical_address);
 				// Let the FTL handle cleanup of the block.
 				ftl->cleanup_block(event, blockErase);
-
 				// Create erase event and attach to current event queue.
 				Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_start_time());
 				erase_event.set_address(Address(blockErase->get_physical_address(), BLOCK));
@@ -229,8 +229,9 @@ std::vector<int> Block_manager::insert_events(Event &event)
 				event.incr_time_taken(erase_event.get_time_taken());
 
 				ftl->controller.stats.numFTLErase++;
-				int dlbn = (*it)->physical_address / BLOCK_SIZE;
-				EMT_delete_list.push_back(dlbn);
+				
+				EMT_delete_list.push_back(blockErase->physical_address);
+				printf("delete one\n");
 				
 			}
 
@@ -244,6 +245,7 @@ std::vector<int> Block_manager::insert_events(Event &event)
 		}
 	}
 	//print_statistics();
+	printf("here?");
 	return EMT_delete_list;
 }
 

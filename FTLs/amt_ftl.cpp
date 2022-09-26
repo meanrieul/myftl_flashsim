@@ -47,9 +47,14 @@ FtlImpl_AMT::FtlImpl_AMT(Controller &controller):
 FtlImpl_DftlParent(controller)
 {
 	uint ssdSize = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
+	copycnt = 0;
 	AMT_table = new AvgModifiedTime[ssdSize];
 	EMT_table = new BPage[NUMBER_OF_ADDRESSABLE_BLOCKS];
-	trim_map = new bool[NUMBER_OF_ADDRESSABLE_BLOCKS*BLOCK_SIZE];
+	pbn_to_lbn = new int[NUMBER_OF_ADDRESSABLE_BLOCKS];
+	for(int i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
+		pbn_to_lbn[i] = i;
+	}
+	trim_map = new bool[ssdSize];
 	inuseBlock = NULL;
 	prev_start_time = 0;
 	printf("Total size to map: %uKB\n", ssdSize * PAGE_SIZE / 1024);
@@ -112,14 +117,15 @@ enum status FtlImpl_AMT::read(Event &event)
 	return controller.issue(event);
 }
 
-uint FtlImpl_AMT::get_similar_data_block(uint lpn) // block들 중 지금 page가 들어가기 가장 적절한 곳을 고르는 함수
+uint FtlImpl_AMT::get_similar_data_block(uint lpn, double timeGap) // block들 중 지금 page가 들어가기 가장 적절한 곳을 고르는 함수
 {	// page의 AMT와 가장 비슷한 평균 AMT 값을 가진 block을 고르자.
 	double min = 99999999999;
 	int min_idx = -1;
 	double dist = 0;
+	double emt = AMT_table[lpn].amt - timeGap;
 	for(int i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++){
-		if(EMT_table[i].pageCount == BLOCK_SIZE) continue;
-		dist = fabs(AMT_table[lpn].amt - EMT_table[i].emt);
+		if(EMT_table[i].pageCount >= BLOCK_SIZE) continue;
+		dist = fabs(emt - EMT_table[i].emt);
 		if(dist < min) {
 			min = dist;
 			min_idx = i;
@@ -181,14 +187,16 @@ void FtlImpl_AMT::AMT_table_update(uint lpn, double start_time) // page 개개�
 		AMT_table[lpn].firstTime = start_time;
 	}
 	AMT_table[lpn].count++;
+	AMT_table[lpn].lastTime = start_time;
 }
 
-void FtlImpl_AMT::EMT_table_delete(uint dlbn)
+void FtlImpl_AMT::EMT_table_delete(uint pbn)
 {
+	int dlbn = pbn_to_lbn[pbn / BLOCK_SIZE];
+	printf("dlbn: %d\n", dlbn);
 	EMT_table[dlbn].pbn = -1;
 	EMT_table[dlbn].nextPage = 0;
 	EMT_table[dlbn].optimal = true;
-	EMT_table[dlbn].state = FREE;
 	EMT_table[dlbn].emt = 0;
 	EMT_table[dlbn].pageCount = 0;
 	EMT_table[dlbn].validCount = 0;
@@ -206,7 +214,7 @@ void FtlImpl_AMT::EMT_table_update(uint lpn, uint pdlbn, uint dlbn) // block 내
 		}
 	}
 	if (AMT_table[lpn].count > 1) {
-		EMT_table[pdlbn].validCount--;
+		if(EMT_table[pdlbn].validCount) EMT_table[pdlbn].validCount--;
 		printf("%f, %d, %f\n", EMT_table[dlbn].emt, EMT_table[dlbn].validCount, AMT_table[lpn].amt);
 		EMT_table[dlbn].emt = (EMT_table[dlbn].emt * EMT_table[dlbn].validCount + AMT_table[lpn].amt) / (EMT_table[dlbn].validCount + 1);
 	}
@@ -234,7 +242,7 @@ enum status FtlImpl_AMT::write(Event &event)
 	AMT_table_update(dlpn, event.get_start_time());
 
 	// 3. AMT값과 가장 비슷한 EMT를 가진 블록 찾기
-	uint dlbn = get_similar_data_block(dlpn);
+	uint dlbn = get_similar_data_block(dlpn, 0);
 	bool handled = false; // this write event handled?
 	// Update trim map
 	trim_map[dlpn] = false;
@@ -246,24 +254,31 @@ enum status FtlImpl_AMT::write(Event &event)
 		Block *block_del = controller.get_block_pointer(add_del);
 		block_del->invalidate_page(add_del.page);
 	}
+	printf("dlbn: %d\n", dlbn);
 	// Get new block if necessary
 	if (EMT_table[dlbn].pbn == -1u)
 	{
+		
 		std::vector<int> EMT_delete_list = Block_manager::instance()->insert_events(event);
 		while(EMT_delete_list.size())
 		{
+			printf("deleted ppn: %d ", EMT_delete_list.back());
 			EMT_table_delete(EMT_delete_list.back());
 			EMT_delete_list.pop_back();
 		}
 		EMT_table[dlbn].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
+		pbn_to_lbn[EMT_table[dlbn].pbn / BLOCK_SIZE] = dlbn;
 		printf("new block: %d, pbn: %d\n", dlbn, EMT_table[dlbn].pbn);
 	}
-
+	for(int i = 0; i<NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
+		printf("%d: %d ||", i, EMT_table[i].pbn);
+	}
 
 	if (EMT_table[dlbn].pbn != -1u)
 	{
 		controller.stats.numMemoryWrite++; // Update next page
-		
+		printf("EMT_table[dlbn].pbn: %d\n",EMT_table[dlbn].pbn);
+		printf("EMT_table[dlbn].nextPage: %d\n",EMT_table[dlbn].nextPage);
 		event.incr_time_taken(RAM_WRITE_DELAY);
 		event.set_address(Address(EMT_table[dlbn].pbn + EMT_table[dlbn].nextPage, PAGE));
 
@@ -301,12 +316,8 @@ enum status FtlImpl_AMT::write(Event &event)
 
 	EMT_table_update(dlpn, prev_blockidx, dlbn);
 	EMT_table[dlbn].pageCount++;
-	
-	 for(uint i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
-	 	printf("%d %lf / page: %d / valid: %d ||\t", i, EMT_table[i].emt, EMT_table[i].pageCount, EMT_table[i].validCount);
-		if(i%4==3)printf("\n");
-	}
 	prev_start_time = event.get_start_time();
+	print_block_status();
 	return controller.issue(event);
 }
 
@@ -392,13 +403,15 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 	 */
 	for (uint i=0;i<BLOCK_SIZE;i++)
 	{
+		printf("%d ", i);
 		assert(block->get_state(i) != EMPTY);
 		// When valid, two events are create, one for read and one for write. They are chained and the controller are
 		// called to execute them. The execution time is then added to the real event.
 		if (block->get_state(i) == VALID)
 		{
+			int dlpn = event.get_logical_address();
 			// Set up events.
-			Event readEvent = Event(READ, event.get_logical_address(), 1, event.get_start_time());
+			Event readEvent = Event(READ, dlpn, 1, event.get_start_time());
 			readEvent.set_address(Address(block->get_physical_address()+i, PAGE));
 
 			// Execute read event
@@ -406,11 +419,10 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 				printf("Data block copy failed.");
 
 			// Get new address to write to and invalidate previous
-			Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_start_time()+readEvent.get_time_taken());
+			Event writeEvent = Event(WRITE, dlpn, 1, event.get_start_time()+readEvent.get_time_taken());
 			Address dataBlockAddress = Address(get_free_data_page(event, false), PAGE);
 			writeEvent.set_address(dataBlockAddress);
 			writeEvent.set_replace_address(Address(block->get_physical_address()+i, PAGE));
-
 			// Setup the write event to read from the right place.
 			writeEvent.set_payload((char*)page_data + (block->get_physical_address()+i) * PAGE_SIZE);
 
@@ -421,7 +433,13 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 
 			// Update GTD
 			long dataPpn = dataBlockAddress.get_linear_address();
-
+			printf("dataPpn: %d\n", dataPpn);
+			AMT_table[dlpn].blockidx = pbn_to_lbn[dataPpn / BLOCK_SIZE];
+			AMT_table[dlpn].pageidx = dataPpn % BLOCK_SIZE;
+			EMT_table[AMT_table[dlpn].blockidx].nextPage++;
+			EMT_table[AMT_table[dlpn].blockidx].pageCount++;
+			EMT_table[AMT_table[dlpn].blockidx].validCount++;
+			printf("copy to %d %d\n", AMT_table[dlpn].blockidx, AMT_table[dlpn].pageidx);
 			// vpn -> Old ppn to new ppn
 			//printf("%li Moving %li to %li\n", reverse_trans_map[block->get_physical_address()+i], block->get_physical_address()+i, dataPpn);
 			invalidated_translation[reverse_trans_map[block->get_physical_address()+i]] = dataPpn;
@@ -435,6 +453,7 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 			controller.stats.numMemoryWrite =+ 3; // GTD Update (2) + translation invalidate (1)
 		}
 	}
+
 
 	/*
 	 * Perform batch update on the marked translation pages
@@ -472,6 +491,14 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 bool FtlImpl_AMT::block_next_new()
 {
 	return (currentDataPage == -1 || currentDataPage % BLOCK_SIZE == BLOCK_SIZE -1);
+}
+
+void FtlImpl_AMT::print_block_status()
+{
+	 for(uint i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
+	 	printf("%d %lf / page: %d / valid: %d ||\t", i, EMT_table[i].emt, EMT_table[i].pageCount, EMT_table[i].validCount);
+		if(i%4==3)printf("\n");
+	}
 }
 
 void FtlImpl_AMT::print_ftl_statistics()

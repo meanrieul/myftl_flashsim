@@ -126,6 +126,7 @@ long FtlImpl_DftlParent::get_free_data_page(Event &event)
 
 long FtlImpl_DftlParent::get_free_data_page(Event &event, bool insert_events)
 {
+	printf("currentDataPage: %d ", currentDataPage);
 	if (currentDataPage == -1 || (currentDataPage % BLOCK_SIZE == BLOCK_SIZE -1 && insert_events))
 		Block_manager::instance()->insert_events(event);
 

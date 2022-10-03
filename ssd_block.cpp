@@ -213,7 +213,6 @@ ssd::uint Block::get_size(void) const
 void Block::invalidate_page(uint page)
 {
 	assert(page < size);
-
 	if (data[page].get_state() == INVALID )
 		return;
 

@@ -678,7 +678,7 @@ public:
 	Address get_free_block(block_type btype, Event &event);
 	void invalidate(Address address, block_type btype);
 	void print_statistics();
-	std::vector<int> insert_events(Event &event);
+	void insert_events(Event &event);
 	void promote_block(block_type to_type);
 	bool is_log_full();
 	void erase_and_invalidate(Event &event, Address &address, block_type btype);
@@ -697,7 +697,6 @@ public:
 
 	void print_cost_status();
 
-	static std::vector<int> EMT_delete_list;
 
 
 private:
@@ -918,6 +917,7 @@ protected:
 	int addressPerPage;
 	int addressSize;
 	uint totalCMTentries;
+	uint copycnt;
 
 	// Current storage
 	long currentDataPage;
@@ -945,7 +945,6 @@ public:
 	enum status write(Event &event);
 	enum status trim(Event &event);
 	void cleanup_block(Event &event, Block *block);
-	uint copycnt;
 	struct BPage {
 		uint pbn;
 		unsigned char nextPage;

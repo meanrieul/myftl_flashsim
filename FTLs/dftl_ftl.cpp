@@ -44,6 +44,7 @@ FtlImpl_Dftl::FtlImpl_Dftl(Controller &controller):
 	FtlImpl_DftlParent(controller)
 {
 	uint ssdSize = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
+	copycnt = 0;
 	printf("Total size to map: %uKB\n", ssdSize * PAGE_SIZE / 1024);
 	printf("Using DFTL.\n");
 	return;
@@ -97,6 +98,8 @@ enum status FtlImpl_Dftl::write(Event &event)
 
 	controller.stats.numFTLWrite++;
 	print_ftl_statistics();
+	printf("copycnt: %d\n", copycnt);
+
 	return controller.issue(event);
 }
 
@@ -171,7 +174,7 @@ void FtlImpl_Dftl::cleanup_block(Event &event, Block *block)
 			// vpn -> Old ppn to new ppn
 			//printf("%li Moving %li to %li\n", reverse_trans_map[block->get_physical_address()+i], block->get_physical_address()+i, dataPpn);
 			invalidated_translation[reverse_trans_map[block->get_physical_address()+i]] = dataPpn;
-
+			copycnt++;
 			// Statistics
 			controller.stats.numFTLRead++;
 			controller.stats.numFTLWrite++;

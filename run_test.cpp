@@ -24,7 +24,7 @@
 
 #include "ssd.h"
 #include <stdlib.h>
-#define SIZE 300
+#define SIZE 1000
 
 using namespace ssd;
 

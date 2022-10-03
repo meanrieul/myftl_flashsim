@@ -86,13 +86,12 @@ enum status Page::_write(Event &event)
 		void *data = (char*)page_data + event.get_address().get_linear_address() * PAGE_SIZE;
 		memcpy (data, event.get_payload(), PAGE_SIZE);
 	}
-	printf("pn:%d = %d\n", event.get_address().get_linear_address(), state);
 	if (event.get_noop() == false)
 	{
+		printf("ppn: %d\n", event.get_address().get_linear_address());
 		assert(state == EMPTY);
 		state = VALID;
 	}
-	printf("okay\n");
 
 	return SUCCESS;
 }

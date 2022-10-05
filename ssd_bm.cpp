@@ -171,11 +171,18 @@ void Block_manager::invalidate(Address address, block_type type)
 void Block_manager::insert_events(Event &event)
 {
 	// Calculate if GC should be activated.
-	float used = (int)invalid_list.size() + (int)log_active + (int)data_active - (int)free_list.size();
-	float total = NUMBER_OF_ADDRESSABLE_BLOCKS;
-	float ratio = used/total;
-	printf("inv: %d log: %d data: %d free: %d total: %d\n", invalid_list.size(), log_active, data_active, free_list.size(), NUMBER_OF_ADDRESSABLE_BLOCKS);
-	printf("ratio: %f, time: %f, lpn: %d\n", ratio, event.get_start_time(), event.get_logical_address());
+	float used, total, ratio;
+	if(FTL_IMPLEMENTATION == IMPL_AMT) {
+		total = NUMBER_OF_ADDRESSABLE_BLOCKS;
+		ratio = ((int)data_active)/total;
+	}
+	else {
+		used = (int)invalid_list.size() + (int)log_active + (int)data_active - (int)free_list.size();
+		total = NUMBER_OF_ADDRESSABLE_BLOCKS;
+		ratio = used/total;
+
+	}
+	// printf("data: %d free: %d total: %d ratio: %f\n", invalid_list.size(), log_active, data_active, free_list.size(), NUMBER_OF_ADDRESSABLE_BLOCKS, ratio);
 	if (ratio < 0.90) // Magic number
 		return;
 
@@ -212,7 +219,7 @@ void Block_manager::insert_events(Event &event)
 				// printf("erase p: %p phy: %li ratio: %i num: %i\n", (*it), (*it)->physical_address, (*it)->get_pages_invalid(), num_to_erase);
 				Block *blockErase = (*it);
 				// Let the FTL handle cleanup of the block.
-				printf("copy page: %d\n", BLOCK_SIZE - (*it)->get_pages_invalid());
+				// printf("copy page: %d\n", BLOCK_SIZE - (*it)->get_pages_invalid());
 				ftl->cleanup_block(event, blockErase);
 				if(FTL_IMPLEMENTATION == IMPL_AMT) data_active--;
 				// Create erase event and attach to current event queue.

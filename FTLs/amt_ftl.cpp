@@ -52,7 +52,7 @@ FtlImpl_DftlParent(controller)
 	EMT_table = new BPage[NUMBER_OF_ADDRESSABLE_BLOCKS];
 	pbn_to_lbn = new int[NUMBER_OF_ADDRESSABLE_BLOCKS];
 	for(int i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
-		pbn_to_lbn[i] = i;
+		pbn_to_lbn[i] = -1;
 	}
 	trim_map = new bool[ssdSize];
 	inuseBlock = NULL;
@@ -74,7 +74,7 @@ FtlImpl_AMT::BPage::BPage()
 	this->pbn = -1;
 	nextPage = 0;
 	optimal = true;
-	state = FREE;
+	allocating = false;
 	emt = 0;
 	pageCount = 0;
 	validCount = 0;
@@ -193,7 +193,7 @@ void FtlImpl_AMT::AMT_table_update(uint lpn, double start_time) // page 개개�
 void FtlImpl_AMT::EMT_table_delete(uint pbn)
 {
 	int dlbn = pbn_to_lbn[pbn / BLOCK_SIZE];
-	printf("EMT_table_delete(dlbn): %d\n", dlbn);
+	// printf("EMT_table_delete(dlbn): %d\n", dlbn);
 	EMT_table[dlbn].pbn = -1;
 	EMT_table[dlbn].nextPage = 0;
 	EMT_table[dlbn].optimal = true;
@@ -263,15 +263,16 @@ enum status FtlImpl_AMT::write(Event &event)
 	{
 		
 		Block_manager::instance()->insert_events(event);
+		EMT_table[dlbn].allocating = true;
 		EMT_table[dlbn].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
+		EMT_table[dlbn].allocating = false;
 		pbn_to_lbn[EMT_table[dlbn].pbn / BLOCK_SIZE] = dlbn;
-		printf("new block: %d, pbn: %d\n", dlbn, EMT_table[dlbn].pbn);
+		// printf("new block: %d, pbn: %d\n", dlbn, EMT_table[dlbn].pbn);
 	}
-	/*for (int i = 0; i<NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
-		printf("%d: %d ||", i, EMT_table[i].pbn);
-	}
-	printf("\n");
-	print_block_status();*/
+	// for (int i = 0; i<NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
+	// 	printf("%d: %d ||", i, EMT_table[i].pbn);
+	// }
+	// printf("\n");
 
 	if (EMT_table[dlbn].pbn != -1u)
 	{
@@ -316,7 +317,8 @@ enum status FtlImpl_AMT::write(Event &event)
 	EMT_table_update(dlpn, prev_blockidx, dlbn);
 	EMT_table[dlbn].pageCount++;
 	prev_start_time = event.get_start_time();
-	printf("copycnt: %d\n", copycnt);
+	// printf("copycnt: %d", copycnt);
+	// print_block_status();
 
 	return controller.issue(event);
 }
@@ -395,8 +397,6 @@ enum status FtlImpl_AMT::trim(Event &event)
 
 void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 {
-	print_block_status();
-	EMT_table_delete(block->physical_address);
 	std::map<long, long> invalidated_translation;
 	/*
 	 * 1. Copy only valid pages in the victim block to the current data block
@@ -421,7 +421,37 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 
 			// Get new address to write to and invalidate previous
 			Event writeEvent = Event(WRITE, dlpn, 1, event.get_start_time()+readEvent.get_time_taken());
-			Address dataBlockAddress = Address(get_free_data_page(event, false), PAGE);
+			// 빈 공간 찾아서 저장하기, 없다면 할당하기
+			int found = 0;
+			for(int i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
+				if(EMT_table[i].pbn != -1u && EMT_table[i].pageCount < BLOCK_SIZE) {
+					currentDataPage = EMT_table[i].pbn + EMT_table[i].nextPage;
+					found = 1;
+					break;
+				}
+			}
+			if(found == 0) {
+				for(int i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++)
+				{
+					if(EMT_table[i].pbn == -1u && EMT_table[i].allocating == false) {
+						// printf("-----new block allocating: %d\n", i);
+						EMT_table[i].allocating = true;
+						EMT_table[i].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
+						EMT_table[i].allocating = false;
+						// printf("-----allocated: %d\n", EMT_table[i].pbn);
+						pbn_to_lbn[EMT_table[i].pbn / BLOCK_SIZE] = i;
+						
+						currentDataPage = EMT_table[i].pbn + EMT_table[i].nextPage;
+						found = 1;
+						break;
+					}
+				}
+			}
+			// printf("currentDataPage: %d\n", currentDataPage);
+			Address dataBlockAddress = Address(currentDataPage, PAGE);
+			
+			
+			// printf("dataBlockAddress: %d\n", dataBlockAddress.get_linear_address());
 			writeEvent.set_address(dataBlockAddress);
 			writeEvent.set_replace_address(Address(block->get_physical_address()+i, PAGE));
 			// Setup the write event to read from the right place.
@@ -435,6 +465,7 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 			// Update GTD
 			long dataPpn = dataBlockAddress.get_linear_address();
 			// printf("dataPpn: %d\n", dataPpn);
+			// printf("lbn: %d\n",pbn_to_lbn[dataPpn / BLOCK_SIZE]);
 			AMT_table[dlpn].blockidx = pbn_to_lbn[dataPpn / BLOCK_SIZE];
 			AMT_table[dlpn].pageidx = dataPpn % BLOCK_SIZE;
 			EMT_table[AMT_table[dlpn].blockidx].nextPage++;
@@ -454,8 +485,9 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 			controller.stats.numMemoryWrite =+ 3; // GTD Update (2) + translation invalidate (1)
 		}
 	}
-	printf("copycnt: %d\n", copycnt);
+	printf("%d ", copycnt);
 
+	EMT_table_delete(block->physical_address);
 	/*
 	 * Perform batch update on the marked translation pages
 	 * 1. Update GDT and CMT if necessary.

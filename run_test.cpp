@@ -104,10 +104,11 @@ int main()
 //	}
 	for (int i = 0; i < SIZE; i++) {
 		srand(i);
-		ulong lpn = rand() % 64;
-		printf("<<event %d: %ld>>\n", i, lpn);
+		ulong lpn = rand() % 128;
+		printf("<<event %d: %ld>> ", i, lpn);
 
 		result += ssd -> event_arrive(WRITE, lpn, 1, (double)100*i);
+		printf("\n");
 	}
 	printf("Total write time: %lf\n", result);
 	delete ssd;

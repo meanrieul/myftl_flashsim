@@ -88,7 +88,7 @@ enum status Page::_write(Event &event)
 	}
 	if (event.get_noop() == false)
 	{
-		printf("ppn: %d\n", event.get_address().get_linear_address());
+		// printf("ppn: %d\n", event.get_address().get_linear_address());
 		assert(state == EMPTY);
 		state = VALID;
 	}

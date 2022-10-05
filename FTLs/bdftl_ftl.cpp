@@ -221,8 +221,7 @@ enum status FtlImpl_BDftl::write(Event &event)
 	controller.stats.numMemoryRead += 3; // Block-level lookup + range check + optimal check
 	event.incr_time_taken(RAM_READ_DELAY*3);
 	controller.stats.numFTLWrite++; // Page writes
-	print_ftl_statistics();
-	printf("copycnt: %d\n", copycnt);
+	// print_ftl_statistics();
 
 	return controller.issue(event);
 }
@@ -395,6 +394,7 @@ void FtlImpl_BDftl::cleanup_block(Event &event, Block *block)
 			controller.stats.numMemoryWrite =+ 3; // GTD Update (2) + translation invalidate (1)
 		}
 	}
+	printf(" %d", copycnt);
 
 	/*
 	 * Perform batch update on the marked translation pages

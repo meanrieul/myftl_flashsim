@@ -948,10 +948,9 @@ public:
 	struct BPage {
 		uint pbn;
 		unsigned char nextPage;
-		enum block_state state;
 		double emt;
 		bool optimal;
-
+		bool allocating;
 		uint pageCount;
 		uint validCount;
 		BPage();

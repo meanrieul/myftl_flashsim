@@ -117,13 +117,15 @@ enum status FtlImpl_AMT::read(Event &event)
 	return controller.issue(event);
 }
 
-uint FtlImpl_AMT::get_similar_data_block(uint lpn, double timeGap) // block들 중 지금 page가 들어가기 가장 적절한 곳을 고르는 함수
+uint FtlImpl_AMT::get_similar_data_block(uint lpn, double timeGap, Event &event) // block들 중 지금 page가 들어가기 가장 적절한 곳을 고르는 함수
 {	// page의 AMT와 가장 비슷한 평균 AMT 값을 가진 block을 고르자.
 	double min = 99999999999;
 	int min_idx = -1;
 	double dist = 0;
 	double emt = AMT_table[lpn].amt - timeGap;
-	for(int i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++){
+	for(int i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
+		event.incr_time_taken(RAM_READ_DELAY);
+		controller.stats.numMemoryRead += 1;
 		if(EMT_table[i].pageCount >= BLOCK_SIZE) continue;
 		dist = fabs(emt - EMT_table[i].emt);
 		if(dist < min) {
@@ -178,8 +180,11 @@ long FtlImpl_AMT::get_my_free_data_page(Event &event)
 
 }
 
-void FtlImpl_AMT::AMT_table_update(uint lpn, double start_time) // page 개개인에 대한 AMT 정보 업데이트
+void FtlImpl_AMT::AMT_table_update(uint lpn, double start_time, Event &event) // page 개개인에 대한 AMT 정보 업데이트
 {
+	event.incr_time_taken(RAM_READ_DELAY);
+	controller.stats.numMemoryRead += 1;
+	
 	if (AMT_table[lpn].count) {
 		AMT_table[lpn].amt = (start_time - AMT_table[lpn].firstTime) / AMT_table[lpn].count;
 	}
@@ -190,8 +195,10 @@ void FtlImpl_AMT::AMT_table_update(uint lpn, double start_time) // page 개개�
 	AMT_table[lpn].lastTime = start_time;
 }
 
-void FtlImpl_AMT::EMT_table_delete(uint pbn)
+void FtlImpl_AMT::EMT_table_delete(uint pbn, Event &event)
 {
+	event.incr_time_taken(RAM_READ_DELAY);
+	controller.stats.numMemoryRead += 1;
 	int dlbn = pbn_to_lbn[pbn / BLOCK_SIZE];
 	// printf("EMT_table_delete(dlbn): %d\n", dlbn);
 	EMT_table[dlbn].pbn = -1;
@@ -202,8 +209,10 @@ void FtlImpl_AMT::EMT_table_delete(uint pbn)
 	EMT_table[dlbn].validCount = 0;
 }
 
-void FtlImpl_AMT::EMT_table_update(uint lpn, uint pdlbn, uint dlbn) // block 내 page들에 대하여 EMT 계산해서 업데이트
+void FtlImpl_AMT::EMT_table_update(uint lpn, uint pdlbn, uint dlbn, Event &event) // block 내 page들에 대하여 EMT 계산해서 업데이트
 {
+	event.incr_time_taken(RAM_READ_DELAY*2);
+	controller.stats.numMemoryRead += 2;
 	if (AMT_table[lpn].count > 2) { // time taken 값이 존재하고, EMT_table 값에 관여되어 있다. 없애줘야 함.
 		if(EMT_table[pdlbn].validCount == 1)
 			EMT_table[pdlbn].emt = 0;
@@ -239,10 +248,10 @@ enum status FtlImpl_AMT::write(Event &event)
 	// 2. AMT_table update
 	uint prev_blockidx = AMT_table[dlpn].blockidx;
 	uint prev_pageidx = AMT_table[dlpn].pageidx;
-	AMT_table_update(dlpn, event.get_start_time());
+	AMT_table_update(dlpn, event.get_start_time(), event);
 
 	// 3. AMT값과 가장 비슷한 EMT를 가진 블록 찾기
-	uint dlbn = get_similar_data_block(dlpn, 0);
+	uint dlbn = get_similar_data_block(dlpn, 0, event);
 	bool handled = false; // this write event handled?
 	// Update trim map
 	trim_map[dlpn] = false;
@@ -314,11 +323,12 @@ enum status FtlImpl_AMT::write(Event &event)
 	// 4. EMT_table update
 	current = trans_map[dlpn];
 
-	EMT_table_update(dlpn, prev_blockidx, dlbn);
+	EMT_table_update(dlpn, prev_blockidx, dlbn, event);
 	EMT_table[dlbn].pageCount++;
 	prev_start_time = event.get_start_time();
 	// printf("copycnt: %d", copycnt);
 	// print_block_status();
+	printf("%d\n", copycnt);
 
 	return controller.issue(event);
 }
@@ -485,9 +495,8 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 			controller.stats.numMemoryWrite =+ 3; // GTD Update (2) + translation invalidate (1)
 		}
 	}
-	printf("%d ", copycnt);
 
-	EMT_table_delete(block->physical_address);
+	EMT_table_delete(block->physical_address, event);
 	/*
 	 * Perform batch update on the marked translation pages
 	 * 1. Update GDT and CMT if necessary.

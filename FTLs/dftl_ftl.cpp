@@ -97,8 +97,6 @@ enum status FtlImpl_Dftl::write(Event &event)
 	event.set_address(b);
 
 	controller.stats.numFTLWrite++;
-	print_ftl_statistics();
-	printf("copycnt: %d\n", copycnt);
 
 	return controller.issue(event);
 }
@@ -184,6 +182,7 @@ void FtlImpl_Dftl::cleanup_block(Event &event, Block *block)
 			controller.stats.numMemoryWrite =+ 3; // GTD Update (2) + translation invalidate (1)
 		}
 	}
+	printf(" %d", copycnt);
 
 	/*
 	 * Perform batch update on the marked translation pages

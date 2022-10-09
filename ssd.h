@@ -766,6 +766,7 @@ public:
 
 	friend class Block_manager;
 
+	uint copycnt;
 	ulong get_erases_remaining(const Address &address) const;
 	void get_least_worn(Address &address) const;
 	enum page_state get_state(const Address &address) const;
@@ -917,7 +918,6 @@ protected:
 	int addressPerPage;
 	int addressSize;
 	uint totalCMTentries;
-	uint copycnt;
 
 	// Current storage
 	long currentDataPage;
@@ -976,10 +976,10 @@ public:
 	double prev_start_time;
 	bool block_next_new();
 
-	uint get_similar_data_block(uint lpn, double timeGap);
-	void EMT_table_update(uint lpn, uint prev_dlbn, uint dlbn);
-	void EMT_table_delete(uint pbn);
-	void AMT_table_update(uint lpn, double start_time);
+	uint get_similar_data_block(uint lpn, double timeGap, Event &event);
+	void EMT_table_update(uint lpn, uint prev_dlbn, uint dlbn, Event &event);
+	void EMT_table_delete(uint pbn, Event &event);
+	void AMT_table_update(uint lpn, double start_time, Event &event);
 	void print_block_status();
 	long get_my_free_data_page(Event &event);
 

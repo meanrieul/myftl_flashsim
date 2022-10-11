@@ -949,7 +949,6 @@ public:
 		uint pbn;
 		unsigned char nextPage;
 		double emt;
-		bool optimal;
 		bool allocating;
 		uint pageCount;
 		uint validCount;

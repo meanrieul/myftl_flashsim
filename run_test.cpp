@@ -110,6 +110,11 @@ int main()
 		result += ssd -> event_arrive(WRITE, lpn, 1, (double)100*i);
 	}
 	printf("total write time: %.20lf\n", result);
+	result = 0;
+	for (int i = 0; i < 128; i++) {
+		result += ssd -> event_arrive(READ, i, 1, (double)100*i);
+	}
+	printf("total read time: %.20lf\n", result);
 	delete ssd;
 	return 0;
 }

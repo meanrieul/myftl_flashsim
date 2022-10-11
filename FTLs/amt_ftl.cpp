@@ -73,7 +73,6 @@ FtlImpl_AMT::BPage::BPage()
 {
 	this->pbn = -1;
 	nextPage = 0;
-	optimal = true;
 	allocating = false;
 	emt = 0;
 	pageCount = 0;
@@ -83,32 +82,18 @@ enum status FtlImpl_AMT::read(Event &event)
 {
 	uint dlpn = event.get_logical_address();
 	uint dlbn = dlpn / BLOCK_SIZE;
+	resolve_mapping(event, false);
 
-	// Block-level lookup
- 	if (EMT_table[dlbn].optimal)
+	MPage current = trans_map[dlpn];
+
+	if (current.ppn != -1)
+		event.set_address(Address(current.ppn, PAGE));
+	else
 	{
-		uint dppn = EMT_table[dlbn].pbn + (dlpn % BLOCK_SIZE);
-
-		if (EMT_table[dlbn].pbn != (uint) -1)
-			event.set_address(Address(dppn, PAGE));
-		else
-		{
-			event.set_address(Address(0, PAGE));
-			event.set_noop(true);
-		}
-	} else { // DFTL lookup
-		resolve_mapping(event, false);
-
-		MPage current = trans_map[dlpn];
-
-		if (current.ppn != -1)
-			event.set_address(Address(current.ppn, PAGE));
-		else
-		{
-			event.set_address(Address(0, PAGE));
-			event.set_noop(true);
-		}
+		event.set_address(Address(0, PAGE));
+		event.set_noop(true);
 	}
+	
 
 	event.incr_time_taken(RAM_READ_DELAY*2);
 	controller.stats.numMemoryRead += 2; // Block-level lookup + range check
@@ -203,7 +188,6 @@ void FtlImpl_AMT::EMT_table_delete(uint pbn, Event &event)
 	// printf("EMT_table_delete(dlbn): %d\n", dlbn);
 	EMT_table[dlbn].pbn = -1;
 	EMT_table[dlbn].nextPage = 0;
-	EMT_table[dlbn].optimal = true;
 	EMT_table[dlbn].emt = 0;
 	EMT_table[dlbn].pageCount = 0;
 	EMT_table[dlbn].validCount = 0;
@@ -295,28 +279,7 @@ enum status FtlImpl_AMT::write(Event &event)
 		AMT_table[dlpn].pageidx = EMT_table[dlbn].nextPage++;
 		handled = true;
 	} 
-/*
-	if (!handled)
-	{
-		// Important order. As get_free_data_page might change current.
-		long free_page = get_my_free_data_page(event);
-		resolve_mapping(event, true);
 
-		MPage current = trans_map[dlpn];
-
-		Address a = Address(current.ppn, PAGE);
-
-		if (current.ppn != -1)
-			event.set_replace_address(a);
-
-
-		update_translation_map(current, free_page);
-		trans_map.replace(trans_map.begin()+dlpn, current);
-
-		// Finish DFTL logic
-		event.set_address(Address(current.ppn, PAGE));
-	}
-*/
 	controller.stats.numMemoryRead += 3; // Block-level lookup + range check + optimal check
 	event.incr_time_taken(RAM_READ_DELAY*3);
 	controller.stats.numFTLWrite++; // Page writes
@@ -341,59 +304,43 @@ enum status FtlImpl_AMT::trim(Event &event)
 	// Update trim map
 	trim_map[dlpn] = true;
 
-	// Block-level lookup
-	if (EMT_table[dlbn].optimal)
+	MPage current = trans_map[dlpn];
+	if (current.ppn != -1)
 	{
-		Address address = Address(EMT_table[dlbn].pbn+event.get_logical_address()%BLOCK_SIZE, PAGE);
+		Address address = Address(current.ppn, PAGE);
 		Block *block = controller.get_block_pointer(address);
 		block->invalidate_page(address.page);
 
-		if (block->get_state() == INACTIVE) // All pages invalid, force an erase. PTRIM style.
-		{
-			EMT_table[dlbn].pbn = -1;
-			EMT_table[dlbn].nextPage = 0;
-			Block_manager::instance()->erase_and_invalidate(event, address, DATA);
-		}
-	} else { // DFTL lookup
+		evict_specific_page_from_cache(event, dlpn);
 
-		MPage current = trans_map[dlpn];
-		if (current.ppn != -1)
-		{
-			Address address = Address(current.ppn, PAGE);
-			Block *block = controller.get_block_pointer(address);
-			block->invalidate_page(address.page);
+		// Update translation map to default values.
+		update_translation_map(current, -1);
+		trans_map.replace(trans_map.begin()+dlpn, current);
 
-			evict_specific_page_from_cache(event, dlpn);
-
-			// Update translation map to default values.
-			update_translation_map(current, -1);
-			trans_map.replace(trans_map.begin()+dlpn, current);
-
-			event.incr_time_taken(RAM_READ_DELAY);
-			event.incr_time_taken(RAM_WRITE_DELAY);
-			controller.stats.numMemoryRead++;
-			controller.stats.numMemoryWrite++;
-		}
-
-		// Update trim map and update block map if all pages are trimmed. i.e. the state are reseted to optimal.
-		long addressStart = dlpn - dlpn % BLOCK_SIZE;
-		bool allTrimmed = true;
-		for (uint i=addressStart;i<addressStart+BLOCK_SIZE;i++)
-		{
-			if (!trim_map[i])
-				allTrimmed = false;
-		}
-
-		controller.stats.numMemoryRead++; // Trim map looping
-
-		if (allTrimmed)
-		{
-			EMT_table[dlbn].pbn = -1;
-			EMT_table[dlbn].nextPage = 0;
-			EMT_table[dlbn].optimal = true;
-			controller.stats.numMemoryWrite++; // Update block_map.
-		}
+		event.incr_time_taken(RAM_READ_DELAY);
+		event.incr_time_taken(RAM_WRITE_DELAY);
+		controller.stats.numMemoryRead++;
+		controller.stats.numMemoryWrite++;
 	}
+
+	// Update trim map and update block map if all pages are trimmed. i.e. the state are reseted to optimal.
+	long addressStart = dlpn - dlpn % BLOCK_SIZE;
+	bool allTrimmed = true;
+	for (uint i=addressStart;i<addressStart+BLOCK_SIZE;i++)
+	{
+		if (!trim_map[i])
+			allTrimmed = false;
+	}
+
+	controller.stats.numMemoryRead++; // Trim map looping
+
+	if (allTrimmed)
+	{
+		EMT_table[dlbn].pbn = -1;
+		EMT_table[dlbn].nextPage = 0;
+		controller.stats.numMemoryWrite++; // Update block_map.
+	}
+	
 
 	event.set_address(Address(0, PAGE));
 	event.set_noop(true);
@@ -548,17 +495,4 @@ void FtlImpl_AMT::print_ftl_statistics()
 	printf("FTL Stats:\n");
 	printf(" Blocks total: %i\n", NUMBER_OF_ADDRESSABLE_BLOCKS);
 
-	/*int numOptimal = 0;
-	for (uint i=0;i<NUMBER_OF_ADDRESSABLE_BLOCKS;i++)
-	{
-		BPage bp = EMT_table[i];
-		if (bp.optimal)
-		{
-			printf("Optimal: %i\n", i);
-			numOptimal++;
-		}
-
-	}
-
-	printf(" Blocks optimal: %i\n", numOptimal);*/
 	Block_manager::instance()->print_statistics();}

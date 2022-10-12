@@ -222,7 +222,7 @@ enum status FtlImpl_BDftl::write(Event &event)
 	event.incr_time_taken(RAM_READ_DELAY*3);
 	controller.stats.numFTLWrite++; // Page writes
 	// print_ftl_statistics();
-	printf("%d\n", copycnt);
+	printf("copycnt: %d\n", copycnt);
 
 	return controller.issue(event);
 }

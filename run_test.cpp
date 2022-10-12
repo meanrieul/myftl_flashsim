@@ -24,7 +24,7 @@
 
 #include "ssd.h"
 #include <stdlib.h>
-#define SIZE 1000
+#define SIZE 3000
 
 using namespace ssd;
 
@@ -104,7 +104,7 @@ int main()
 //	}
 	for (int i = 0; i < SIZE; i++) {
 		srand(i);
-		printf("%d: ", i);
+		printf("<<event %d>> ", i);
 		ulong lpn = rand() % 128;
 
 		result += ssd -> event_arrive(WRITE, lpn, 1, (double)100*i);

@@ -679,6 +679,7 @@ public:
 	void invalidate(Address address, block_type btype);
 	void print_statistics();
 	void insert_events(Event &event);
+	void insert_events_AMT(Event &event, int freePage);
 	void promote_block(block_type to_type);
 	bool is_log_full();
 	void erase_and_invalidate(Event &event, Address &address, block_type btype);
@@ -958,9 +959,10 @@ public:
 	BPage *EMT_table;
 	int *pbn_to_lbn;
 	bool *trim_map;
-
+	int *validPages;
 	Block* inuseBlock;
-
+	int freePage;
+	
 	void print_ftl_statistics();
 	struct AvgModifiedTime {
 		double amt;

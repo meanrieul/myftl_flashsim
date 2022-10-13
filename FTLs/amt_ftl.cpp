@@ -108,9 +108,9 @@ uint FtlImpl_AMT::get_similar_data_block(uint lpn, double timeGap, Event &event)
 	double dist = 0;
 	double emt = AMT_table[lpn].amt - timeGap;
 	for(uint i = 0; i < NUMBER_OF_ADDRESSABLE_BLOCKS; i++) {
+		if(EMT_table[i].pageCount >= BLOCK_SIZE) continue;
 		event.incr_time_taken(RAM_READ_DELAY);
 		controller.stats.numMemoryRead += 1;
-		if(EMT_table[i].pageCount >= BLOCK_SIZE) continue;
 		dist = fabs(emt - EMT_table[i].emt);
 		if(dist < min) {
 			min = dist;
@@ -124,6 +124,8 @@ void FtlImpl_AMT::AMT_table_update(uint lpn, double start_time, Event &event) //
 {
 	event.incr_time_taken(RAM_READ_DELAY);
 	controller.stats.numMemoryRead += 1;
+	event.incr_time_taken(RAM_WRITE_DELAY);
+	controller.stats.numMemoryWrite += 1;
 	
 	if (AMT_table[lpn].count) {
 		AMT_table[lpn].amt = (start_time - AMT_table[lpn].firstTime) / AMT_table[lpn].count;
@@ -137,8 +139,8 @@ void FtlImpl_AMT::AMT_table_update(uint lpn, double start_time, Event &event) //
 
 void FtlImpl_AMT::EMT_table_delete(uint pbn, Event &event)
 {
-	event.incr_time_taken(RAM_READ_DELAY);
-	controller.stats.numMemoryRead += 1;
+	event.incr_time_taken(RAM_WRITE_DELAY);
+	controller.stats.numMemoryWrite += 1;
 	int dlbn = pbn_to_lbn[pbn / BLOCK_SIZE];
 	// printf("EMT_table_delete(dlbn): %d\n", dlbn);
 	EMT_table[dlbn].pbn = -1;
@@ -153,6 +155,8 @@ void FtlImpl_AMT::EMT_table_update(uint lpn, uint pdlbn, uint dlbn, Event &event
 {
 	event.incr_time_taken(RAM_READ_DELAY*2);
 	controller.stats.numMemoryRead += 2;
+	event.incr_time_taken(RAM_WRITE_DELAY*2);
+	controller.stats.numMemoryWrite += 2;
 	if (AMT_table[lpn].count > 2) { // time taken 값이 존재하고, EMT_table 값에 관여되어 있다. 없애줘야 함.
 		if(EMT_table[pdlbn].validCount == 1)
 			EMT_table[pdlbn].emt = 0;
@@ -246,7 +250,6 @@ enum status FtlImpl_AMT::write(Event &event)
 	EMT_table[dlbn].pageCount++;
 	freePage--;
 	prev_start_time = event.get_start_time();
-	printf("copycnt: %d\n", copycnt);
 	// print_block_status();
 
 	return controller.issue(event);
@@ -391,6 +394,7 @@ void FtlImpl_AMT::cleanup_block(Event &event, Block *block)
 			//printf("%li Moving %li to %li\n", reverse_trans_map[block->get_physical_address()+i], block->get_physical_address()+i, dataPpn);
 			invalidated_translation[reverse_trans_map[block->get_physical_address()+i]] = dataPpn;
 			copycnt++;
+			printf("copycnt: %d\n", copycnt);
 			// Statistics
 			controller.stats.numFTLRead++;
 			controller.stats.numFTLWrite++;

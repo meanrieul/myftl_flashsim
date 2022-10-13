@@ -120,7 +120,7 @@ int main()
 		for (int j = 1; j <= 16; j++) {
 			if (i >= j && i % j == 0) {
 				for(int k = 1; k <= 32; k++) {
-				printf("time: %f /", (double)100*time);
+				//printf("time: %f /", (double)100*time);
 				result += ssd -> event_arrive(WRITE, j*k, 1, (double)100*time++);
 				}
 			}

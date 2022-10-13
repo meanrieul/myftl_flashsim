@@ -222,7 +222,6 @@ enum status FtlImpl_BDftl::write(Event &event)
 	event.incr_time_taken(RAM_READ_DELAY*3);
 	controller.stats.numFTLWrite++; // Page writes
 	// print_ftl_statistics();
-	printf("copycnt: %d\n", copycnt);
 
 	return controller.issue(event);
 }
@@ -386,6 +385,7 @@ void FtlImpl_BDftl::cleanup_block(Event &event, Block *block)
 			//printf("%li Moving %li to %li\n", reverse_trans_map[block->get_physical_address()+i], block->get_physical_address()+i, dataPpn);
 			invalidated_translation[reverse_trans_map[block->get_physical_address()+i]] = dataPpn;
 			copycnt++;
+			printf("copycnt: %d\n", copycnt);
 			// Statistics
 			controller.stats.numFTLRead++;
 			controller.stats.numFTLWrite++;

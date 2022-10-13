@@ -127,6 +127,15 @@ int main()
 		}
 	}
 	printf("total write time: %.20lf\n", result);
+	result = 0;
+	time = 0;
+	for(int j = 1; j <= 16; j++) {
+		for(int k = 1; k <= 32; k++) {
+			result += ssd -> event_arrive(READ, j*k, 1, (double)100*time++);
+		}
+	}
+	printf("total read time: %.20lf\n", result);
+
 	delete ssd;
 	return 0;
 }

@@ -212,6 +212,7 @@ enum status FtlImpl_AMT::write(Event &event)
 	if (EMT_table[dlbn].pbn == -1u)
 	{
 		Block_manager::instance()->insert_events_AMT(event, freePage);
+		// Block_manager::instance()->insert_events(event);
 		EMT_table[dlbn].allocating = true;
 		EMT_table[dlbn].pbn = Block_manager::instance()->get_free_block(DATA, event).get_linear_address();
 		EMT_table[dlbn].allocating = false;

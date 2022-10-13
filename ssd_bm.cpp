@@ -210,12 +210,12 @@ void Block_manager::insert_events(Event &event)
 		{
 			if (current_writing_block != (*it)->physical_address)
 			{
-				// printf("erase p: %p phy: %li ratio: %i num: %i\n", (*it), (*it)->physical_address, (*it)->get_pages_invalid(), num_to_erase);
+				//printf("erase p: %p phy: %li ratio: %i num: %i\n", (*it), (*it)->physical_address, (*it)->get_pages_invalid(), num_to_erase);
 				Block *blockErase = (*it);
 				// Let the FTL handle cleanup of the block.
-				// printf("copy page: %d\n", BLOCK_SIZE - (*it)->get_pages_invalid());
+				//printf("copy page: %d\n", BLOCK_SIZE - (*it)->get_pages_invalid());
 				ftl->cleanup_block(event, blockErase);
-
+				data_active--;
 				// Create erase event and attach to current event queue.
 				Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_start_time());
 				erase_event.set_address(Address(blockErase->get_physical_address(), BLOCK));

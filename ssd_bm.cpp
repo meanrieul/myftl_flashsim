@@ -261,7 +261,7 @@ void Block_manager::insert_events_AMT(Event &event, int freePage)
 	// First step and least expensive is to go though invalid list. (Only used by FAST)
 	
 	num_insert_events++;
-	for(int i = 0; i <= BLOCK_SIZE; i++) {
+	for(uint i = 0; i <= BLOCK_SIZE; i++) {
 		if(num_to_erase) {
 			ActiveByCost::iterator it = active_cost.get<1>().end();
 			--it;

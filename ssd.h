@@ -959,9 +959,7 @@ public:
 	BPage *EMT_table;
 	int *pbn_to_lbn;
 	bool *trim_map;
-	int *validPages;
-	Block* inuseBlock;
-	int freePage;
+	uint freePage;
 	
 	void print_ftl_statistics();
 	struct AvgModifiedTime {
@@ -972,7 +970,6 @@ public:
 		uint blockidx;
 		uint pageidx;
 	};
-	std::queue<Block*> blockQueue;
 	AvgModifiedTime *AMT_table;
 	double prev_start_time;
 	bool block_next_new();

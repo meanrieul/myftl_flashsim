@@ -102,19 +102,31 @@ int main()
 //		result = ssd -> event_arrive(READ, i%64, 1, (double) 1+(500*i));
 //		printf("Read time : %.20lf\n", result);
 //	}
-	for (int i = 0; i < SIZE; i++) {
-		srand(i);
-		printf("<<event %d>> ", i);
-		ulong lpn = rand() % 128;
+	// for (int i = 0; i < SIZE; i++) {
+	// 	srand(i);
+	// 	printf("<<event %d>> ", i);
+	// 	ulong lpn = rand() % 128;
 
-		result += ssd -> event_arrive(WRITE, lpn, 1, (double)100*i);
+	// 	result += ssd -> event_arrive(WRITE, lpn, 1, (double)100*i);
+	// }
+	// printf("total write time: %.20lf\n", result);
+	// result = 0;
+	// for (int i = 0; i < 128; i++) {
+	// 	result += ssd -> event_arrive(READ, i, 1, (double)100*i);
+	// }
+	// printf("total read time: %.20lf\n", result);
+	int time = 0;
+	for (int i = 1; i <= SIZE; i++) {
+		for(int j = 1; j <= 16; j++) {
+			if(i >= j && i % j == 0) {
+				for(int k = 1; k <= 32; k++) {
+				printf("time: %ld /", 100*time);
+				result += ssd -> event_arrive(WRITE, j*k, 1, (double)100*time++);
+				}
+			}
+		}
 	}
 	printf("total write time: %.20lf\n", result);
-	result = 0;
-	for (int i = 0; i < 128; i++) {
-		result += ssd -> event_arrive(READ, i, 1, (double)100*i);
-	}
-	printf("total read time: %.20lf\n", result);
 	delete ssd;
 	return 0;
 }
